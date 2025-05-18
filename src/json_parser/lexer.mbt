@@ -213,7 +213,7 @@ fn lex_number(
     },
     match c {
       '.' | _ if c.is_ascii_digit() => []
-      _ => [Token::Number(Token::to_int([..number_list, c]))]
+      _ => [Token::Number(Token::to_int(number_list))]
     },
   )
 }
