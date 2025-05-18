@@ -116,42 +116,45 @@ pub fn lex(text : String) -> (Array[Token], LexerState)!LexerErrors {
             Start
           }
         }
-      True(loaded_list) =>
-        match loaded_list {
-          _ if loaded_list.length() < 4 => state = True([..loaded_list, c])
-          _ if loaded_list == "true" => {
-            tokens.push(Token::Boolean(true))
-            state = Start
-          }
-          _ =>
-            raise UnexpectedCharacter(
-              [..loaded_list, c].map(Char::to_string).join(""),
-            )
+      True(loaded_chars) => {
+        let (s, ts) = lex_fixed_word!(
+          c,
+          loaded_chars,
+          "true",
+          fn(loaded_chars : Array[Char]) { True([..loaded_chars, c]) },
+          Boolean(true),
+        )
+        state = s
+        for t in ts {
+          tokens.push(t)
         }
-      False(loaded_list) =>
-        match loaded_list {
-          _ if loaded_list.length() < 5 => state = False([..loaded_list, c])
-          _ if loaded_list == "false" => {
-            tokens.push(Token::Boolean(false))
-            state = Start
-          }
-          _ =>
-            raise UnexpectedCharacter(
-              [..loaded_list, c].map(Char::to_string).join(""),
-            )
+      }
+      False(loaded_chars) => {
+        let (s, ts) = lex_fixed_word!(
+          c,
+          loaded_chars,
+          "false",
+          fn(loaded_chars : Array[Char]) { False([..loaded_chars, c]) },
+          Boolean(false),
+        )
+        state = s
+        for t in ts {
+          tokens.push(t)
         }
-      Null(loaded_list) =>
-        match loaded_list {
-          _ if loaded_list.length() < 4 => state = Null([..loaded_list, c])
-          _ if loaded_list == "null" => {
-            tokens.push(Token::Null)
-            state = Start
-          }
-          _ =>
-            raise UnexpectedCharacter(
-              [..loaded_list, c].map(Char::to_string).join(""),
-            )
+      }
+      Null(loaded_chars) => {
+        let (s, ts) = lex_fixed_word!(
+          c,
+          loaded_chars,
+          "null",
+          fn(loaded_chars : Array[Char]) { Null([..loaded_chars, c]) },
+          Null,
+        )
+        state = s
+        for t in ts {
+          tokens.push(t)
         }
+      }
     }
   }
   // 終了処理
@@ -260,6 +263,25 @@ fn lex_number(
       _ => [Token::Number(Token::to_int([..number_list, c]))]
     },
   )
+}
+
+///|
+fn lex_fixed_word(
+  c : Char,
+  loaded_chars : String,
+  target_word : String,
+  target_state : (Array[Char]) -> LexerState,
+  target_token : Token
+) -> (LexerState, Array[Token])!LexerErrors {
+  match loaded_chars {
+    _ if loaded_chars.length() < target_word.length() =>
+      (target_state([..loaded_chars, c]), [])
+    _ if loaded_chars == target_word => (Start, [target_token])
+    _ =>
+      raise UnexpectedCharacter(
+        [..loaded_chars, c].map(Char::to_string).join(""),
+      )
+  }
 }
 
 ///|
