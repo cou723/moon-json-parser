@@ -1,0 +1,7 @@
+{
+  "is-main": true,
+  "import": [
+    "moonbitlang/x/fs",
+    "cou723/hello/json_parser"
+  ]
+}
