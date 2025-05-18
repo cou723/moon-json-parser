@@ -85,111 +85,62 @@ type! LexerErrors {
 pub fn lex(text : String) -> (Array[Token], LexerState)!LexerErrors {
   let tokens : Array[Token] = []
   let mut state : LexerState = Start
-  for c in text.to_array() {
-    match state {
-      Start => {
-        let (s, t) = lex_start!(c)
-        state = s
-        if t is Some(token) {
-          tokens.push(token)
-        }
-      }
-      Text(quote, loaded, text_lexer_state) => {
-        let (s, ts) = lex_text(text_lexer_state, quote, loaded, c)
-        state = s
-        for t in ts {
-          tokens.push(t)
-        }
-      }
-      Number(n) => {
-        let (s, ts) = lex_number(n, c)
-        state = s
-        for t in ts {
-          tokens.push(t)
-        }
-      }
+  let lex_true = lex_fixed_word!(
+    "true",
+    Boolean(true),
+    fn(loaded_chars) { True(loaded_chars) },
+    _,
+    _,
+  )
+  let lex_false = lex_fixed_word!(
+    "false",
+    Boolean(false),
+    fn(loaded_chars) { False(loaded_chars) },
+    _,
+    _,
+  )
+  let lex_null = lex_fixed_word!(
+    "null",
+    Null,
+    fn(loaded_chars) { Null(loaded_chars) },
+    _,
+    _,
+  )
+  for c in (text + "\u0000").to_array() {
+    let (s, ts) = match state {
+      Start => lex_start!(c)
+      Text(quote, loaded, text_lexer_state) =>
+        lex_text(text_lexer_state, quote, loaded, c)
+      Number(n) => lex_number(n, c)
       Decimal(n, i) =>
-        state = match c {
-          _ if c.is_ascii_digit() => Decimal([..n, c], i)
-          _ => {
-            tokens.push(Token::Decimal(Token::to_double([..n, c], i)))
-            Start
-          }
-        }
-      True(loaded_chars) => {
-        let (s, ts) = lex_fixed_word!(
-          c,
-          loaded_chars,
-          "true",
-          fn(loaded_chars : Array[Char]) { True([..loaded_chars, c]) },
-          Boolean(true),
+        (
+          match c {
+            _ if c.is_ascii_digit() => Decimal([..n, c], i)
+            _ => {
+              tokens.push(Token::Decimal(Token::to_double([..n, c], i)))
+              Start
+            }
+          },
+          match c {
+            _ if c.is_ascii_digit() => []
+            _ => [Token::Decimal(Token::to_double([..n, c], i))]
+          },
         )
-        state = s
-        for t in ts {
-          tokens.push(t)
-        }
-      }
-      False(loaded_chars) => {
-        let (s, ts) = lex_fixed_word!(
-          c,
-          loaded_chars,
-          "false",
-          fn(loaded_chars : Array[Char]) { False([..loaded_chars, c]) },
-          Boolean(false),
-        )
-        state = s
-        for t in ts {
-          tokens.push(t)
-        }
-      }
-      Null(loaded_chars) => {
-        let (s, ts) = lex_fixed_word!(
-          c,
-          loaded_chars,
-          "null",
-          fn(loaded_chars : Array[Char]) { Null([..loaded_chars, c]) },
-          Null,
-        )
-        state = s
-        for t in ts {
-          tokens.push(t)
-        }
-      }
+      True(loaded_chars) => lex_true!(loaded_chars, c)
+      False(loaded_chars) => lex_false!(loaded_chars, c)
+      Null(loaded_chars) => lex_null!(loaded_chars, c)
     }
-  }
-  // 終了処理
-  match state {
-    Number(number_list) =>
-      tokens.push(Token::Number(Token::to_int(number_list)))
-    Decimal(number_list, i) =>
-      tokens.push(Token::Decimal(Token::to_double(number_list, i)))
-    True(text) =>
-      if text == "true" {
-        tokens.push(Token::Boolean(true))
-      } else {
-        raise UnexpectedCharacter(text)
-      }
-    False(text) =>
-      if text == "false" {
-        tokens.push(Token::Boolean(false))
-      } else {
-        raise UnexpectedCharacter(text)
-      }
-    Null(text) =>
-      if text == "null" {
-        tokens.push(Token::Null)
-      } else {
-        raise UnexpectedCharacter(text)
-      }
-    Text(_, _, _) => raise ExpectQuote
-    _ => return (tokens, state)
+    state = s
+    for t in ts {
+      tokens.push(t)
+    }
   }
   state = Start
   return (tokens, state)
 }
 
 ///|
-fn lex_start(c : Char) -> (LexerState, Token?)!LexerErrors {
+fn lex_start(c : Char) -> (LexerState, Array[Token])!LexerErrors {
   (
     match c {
       '{' | '}' | '[' | ']' | ':' | ',' => Start
@@ -198,20 +149,22 @@ fn lex_start(c : Char) -> (LexerState, Token?)!LexerErrors {
       't' => True(['t'])
       'f' => False(['f'])
       'n' => Null(['n'])
+      '\u0000' => Start
       _ if c.is_ascii_digit() => Number([c])
       _ => raise UnexpectedCharacter(c.to_string())
     },
     match c {
-      '{' => Some(BraceStart)
-      '}' => Some(BraceEnd)
-      '[' => Some(BracketStart)
-      ']' => Some(BracketEnd)
-      ':' => Some(Colon)
-      ',' => Some(Comma)
-      '"' => Some(DoubleQuotation)
-      '\'' => Some(SingleQuotation)
-      't' | 'f' | 'n' => None
-      _ if c.is_ascii_digit() => None
+      '{' => [BraceStart]
+      '}' => [BraceEnd]
+      '[' => [BracketStart]
+      ']' => [BracketEnd]
+      ':' => [Colon]
+      ',' => [Comma]
+      '"' => [DoubleQuotation]
+      '\'' => [SingleQuotation]
+      't' | 'f' | 'n' => []
+      '\u0000' => []
+      _ if c.is_ascii_digit() => []
       _ => raise UnexpectedCharacter(c.to_string())
     },
   )
@@ -267,20 +220,18 @@ fn lex_number(
 
 ///|
 fn lex_fixed_word(
-  c : Char,
-  loaded_chars : String,
   target_word : String,
-  target_state : (Array[Char]) -> LexerState,
-  target_token : Token
+  target_token : Token,
+  target_state : (String) -> LexerState,
+  loaded_chars : String,
+  c : Char
 ) -> (LexerState, Array[Token])!LexerErrors {
-  match loaded_chars {
-    _ if loaded_chars.length() < target_word.length() =>
-      (target_state([..loaded_chars, c]), [])
-    _ if loaded_chars == target_word => (Start, [target_token])
-    _ =>
-      raise UnexpectedCharacter(
-        [..loaded_chars, c].map(Char::to_string).join(""),
-      )
+  println("loaded_chars " + loaded_chars)
+  let loaded = loaded_chars + c.to_string()
+  match loaded {
+    _ if loaded == target_word => (Start, [target_token])
+    _ if target_word.contains(loaded) => (target_state(loaded), [])
+    _ => raise UnexpectedCharacter(loaded)
   }
 }
 
@@ -344,7 +295,7 @@ test "decimal" {
 test "boolean" {
   assert_eq!(lex!("true"), ([Token::Boolean(true)], Start))
   assert_eq!(lex!("false"), ([Token::Boolean(false)], Start))
-  assert_eq!(lex?("ttue"), Err(UnexpectedCharacter("ttue")))
+  assert_eq!(lex?("ttue"), Err(UnexpectedCharacter("tt")))
   assert_eq!(lex?("trua"), Err(UnexpectedCharacter("trua")))
   assert_eq!(lex?("falsa"), Err(UnexpectedCharacter("falsa")))
 }
@@ -353,8 +304,7 @@ test "boolean" {
 test "null" {
   assert_eq!(lex!("null"), ([Token::Null], Start))
   assert_eq!(lex?("mull"), Err(UnexpectedCharacter("m")))
-  assert_eq!(lex?("nall"), Err(UnexpectedCharacter("nall")))
-  assert_eq!(lex?("nuli"), Err(UnexpectedCharacter("nuli")))
+  assert_eq!(lex?("nall"), Err(UnexpectedCharacter("na")))
   assert_eq!(lex?("nuli"), Err(UnexpectedCharacter("nuli")))
   assert_eq!(lex?("nullx"), Err(UnexpectedCharacter("x")))
 }
