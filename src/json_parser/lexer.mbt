@@ -53,6 +53,14 @@ test "to_int" {
 }
 
 ///|
+test "to_double" {
+  assert_eq!(Token::to_double(['0', '1'], 1), 0.1)
+  assert_eq!(Token::to_double(['1', '1'], 1), 1.1)
+  assert_eq!(Token::to_double(['1', '1', '1'], 1), 1.11)
+  assert_eq!(Token::to_double(['1', '1', '1'], 2), 11.1)
+}
+
+///|
 enum StartingQuote {
   Single
   Double
@@ -113,19 +121,10 @@ pub fn lex(text : String) -> (Array[Token], LexerState)!LexerErrors {
         lex_text(text_lexer_state, quote, loaded, c)
       Number(n) => lex_number(n, c)
       Decimal(n, i) =>
-        (
-          match c {
-            _ if c.is_ascii_digit() => Decimal([..n, c], i)
-            _ => {
-              tokens.push(Token::Decimal(Token::to_double([..n, c], i)))
-              Start
-            }
-          },
-          match c {
-            _ if c.is_ascii_digit() => []
-            _ => [Token::Decimal(Token::to_double([..n, c], i))]
-          },
-        )
+        match c {
+          _ if c.is_ascii_digit() => (Decimal([..n, c], i), [])
+          _ => (Start, [Token::Decimal(Token::to_double(n, i))])
+        }
       True(loaded_chars) => lex_true!(loaded_chars, c)
       False(loaded_chars) => lex_false!(loaded_chars, c)
       Null(loaded_chars) => lex_null!(loaded_chars, c)
@@ -205,17 +204,11 @@ fn lex_number(
   number_list : Array[Char],
   c : Char
 ) -> (LexerState, Array[Token]) {
-  (
-    match c {
-      '.' => Decimal([..number_list], number_list.length())
-      _ if c.is_ascii_digit() => Number([..number_list, c])
-      _ => Start
-    },
-    match c {
-      '.' | _ if c.is_ascii_digit() => []
-      _ => [Token::Number(Token::to_int(number_list))]
-    },
-  )
+  match c {
+    '.' => (Decimal(number_list, number_list.length()), [])
+    _ if c.is_ascii_digit() => (Number([..number_list, c]), [])
+    _ => (Start, [Token::Number(Token::to_int(number_list))])
+  }
 }
 
 ///|
@@ -226,7 +219,6 @@ fn lex_fixed_word(
   loaded_chars : String,
   c : Char
 ) -> (LexerState, Array[Token])!LexerErrors {
-  println("loaded_chars " + loaded_chars)
   let loaded = loaded_chars + c.to_string()
   match loaded {
     _ if loaded == target_word => (Start, [target_token])
@@ -307,4 +299,45 @@ test "null" {
   assert_eq!(lex?("nall"), Err(UnexpectedCharacter("na")))
   assert_eq!(lex?("nuli"), Err(UnexpectedCharacter("nuli")))
   assert_eq!(lex?("nullx"), Err(UnexpectedCharacter("x")))
+}
+
+///|
+test "lex" {
+  assert_eq!(
+    lex!(
+      "{'decimal_test':12.3,\"number_test\":456,'array_test':['element1',true,false,null]}",
+    ),
+    (
+      [
+        BraceStart,
+        SingleQuotation,
+        Text("decimal_test"),
+        SingleQuotation,
+        Colon,
+        Decimal(12.3),
+        Comma,
+        DoubleQuotation,
+        Text("number_test"),
+        DoubleQuotation,
+        Colon,
+        Number(456),
+        SingleQuotation,
+        Text("array_test"),
+        SingleQuotation,
+        BracketStart,
+        SingleQuotation,
+        Text("element1"),
+        SingleQuotation,
+        Comma,
+        Boolean(true),
+        Comma,
+        Boolean(false),
+        Comma,
+        Null,
+        BracketEnd,
+        BraceEnd,
+      ],
+      Start,
+    ),
+  )
 }
