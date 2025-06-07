@@ -11,8 +11,8 @@ enum Token {
   BracketEnd // ]
   DoubleQuotation
   SingleQuotation
-  Comma // ,
-  Colon // :
+  Comma
+  Colon
 } derive(Show, Eq)
 
 ///|
@@ -73,7 +73,7 @@ enum TextLexerState {
 } derive(Show, Eq)
 
 ///|
-enum LexerState {
+enum LexerReadingState {
   Start
   Text(StartingQuote, String, TextLexerState)
   True(String)
@@ -90,13 +90,14 @@ type! LexerErrors {
 } derive(Eq, Show)
 
 ///|
-pub fn lex(text : String) -> (Array[Token], LexerState)!LexerErrors {
+pub fn lex(text : String) -> (Array[Token], LexerReadingState)!LexerErrors {
   let tokens : Array[Token] = []
-  let mut state : LexerState = Start
+  let mut state : LexerReadingState = Start
   let lex_true = lex_fixed_word!(
     "true",
     Boolean(true),
     fn(loaded_chars) { True(loaded_chars) },
+    _,
     _,
     _,
   )
@@ -106,6 +107,7 @@ pub fn lex(text : String) -> (Array[Token], LexerState)!LexerErrors {
     fn(loaded_chars) { False(loaded_chars) },
     _,
     _,
+    _,
   )
   let lex_null = lex_fixed_word!(
     "null",
@@ -113,34 +115,54 @@ pub fn lex(text : String) -> (Array[Token], LexerState)!LexerErrors {
     fn(loaded_chars) { Null(loaded_chars) },
     _,
     _,
+    _,
   )
-  for c in (text + "\u0000").to_array() {
-    let (s, ts) = match state {
-      Start => lex_start!(c)
+  let terminated_text = text + "\u0000"
+  let mut i : Int = 0 // UIntを使いたいところだが、文字列へのアクセスにはIntを使うので、Intで計算
+  let mut infinity_blocker = 0
+  while i != terminated_text.char_length() {
+    if infinity_blocker == 100 {
+      println("infinity_blocker reached")
+      println("state: " + state.to_string())
+      println("i: " + i.to_string())
+      println("terminated_text: " + terminated_text)
+      println("tokens: " + tokens.to_string())
+      println("text: " + text)
+      println("text length: " + text.length().to_string())
+      println("terminated_text length: " + terminated_text.length().to_string())
+      break
+    }
+    let c = terminated_text.char_at(i)
+    let (updated_i, updated_state, additional_tokens) = match state {
+      Start => lex_start!(c, i)
       Text(quote, loaded, text_lexer_state) =>
-        lex_text(text_lexer_state, quote, loaded, c)
-      Number(n) => lex_number(n, c)
-      Decimal(n, i) =>
+        lex_text(text_lexer_state, quote, loaded, c, i)
+      Number(number) => lex_number(number, c, i)
+      Decimal(decimal, e) =>
         match c {
-          _ if c.is_ascii_digit() => (Decimal([..n, c], i), [])
-          _ => (Start, [Token::Decimal(Token::to_double(n, i))])
+          _ if c.is_ascii_digit() => (i + 1, Decimal([..decimal, c], e), [])
+          _ => (i, Start, [Token::Decimal(Token::to_double(decimal, e))])
         }
-      True(loaded_chars) => lex_true!(loaded_chars, c)
-      False(loaded_chars) => lex_false!(loaded_chars, c)
-      Null(loaded_chars) => lex_null!(loaded_chars, c)
+      True(loaded_chars) => lex_true!(loaded_chars, c, i)
+      False(loaded_chars) => lex_false!(loaded_chars, c, i)
+      Null(loaded_chars) => lex_null!(loaded_chars, c, i)
     }
-    state = s
-    for t in ts {
-      tokens.push(t)
-    }
+    state = updated_state
+    tokens.push_iter(additional_tokens.iter())
+    i = updated_i
+    infinity_blocker += 1
   }
   state = Start
   return (tokens, state)
 }
 
 ///|
-fn lex_start(c : Char) -> (LexerState, Array[Token])!LexerErrors {
+fn lex_start(
+  c : Char,
+  i : Int
+) -> (Int, LexerReadingState, Array[Token])!LexerErrors {
   (
+    i + 1,
     match c {
       '{' | '}' | '[' | ']' | ':' | ',' => Start
       '"' => Text(Double, "", Normal)
@@ -174,18 +196,21 @@ fn lex_text(
   state : TextLexerState,
   quote : StartingQuote,
   loaded : String,
-  c : Char
-) -> (LexerState, Array[Token]) {
+  c : Char,
+  i : Int
+) -> (Int, LexerReadingState, Array[Token]) {
   (
+    i + 1,
     match state {
       Normal =>
         match c {
-          '\"' => LexerState::Start
-          '\'' => LexerState::Start
-          '\\' => LexerState::Text(quote, loaded, EscapeSequence)
-          _ => LexerState::Text(quote, loaded + c.to_string(), Normal)
+          '\"' => LexerReadingState::Start
+          '\'' => LexerReadingState::Start
+          '\\' => LexerReadingState::Text(quote, loaded, EscapeSequence)
+          _ => LexerReadingState::Text(quote, loaded + c.to_string(), Normal)
         }
-      EscapeSequence => LexerState::Text(quote, loaded + c.to_string(), Normal)
+      EscapeSequence =>
+        LexerReadingState::Text(quote, loaded + c.to_string(), Normal)
     },
     match state {
       Normal =>
@@ -202,12 +227,13 @@ fn lex_text(
 ///|
 fn lex_number(
   number_list : Array[Char],
-  c : Char
-) -> (LexerState, Array[Token]) {
+  c : Char,
+  i : Int
+) -> (Int, LexerReadingState, Array[Token]) {
   match c {
-    '.' => (Decimal(number_list, number_list.length()), [])
-    _ if c.is_ascii_digit() => (Number([..number_list, c]), [])
-    _ => (Start, [Token::Number(Token::to_int(number_list))])
+    '.' => (i + 1, Decimal(number_list, number_list.length()), [])
+    _ if c.is_ascii_digit() => (i + 1, Number([..number_list, c]), [])
+    _ => (i, Start, [Token::Number(Token::to_int(number_list))])
   }
 }
 
@@ -215,14 +241,15 @@ fn lex_number(
 fn lex_fixed_word(
   target_word : String,
   target_token : Token,
-  target_state : (String) -> LexerState,
+  target_state : (String) -> LexerReadingState,
   loaded_chars : String,
-  c : Char
-) -> (LexerState, Array[Token])!LexerErrors {
+  c : Char,
+  i : Int
+) -> (Int, LexerReadingState, Array[Token])!LexerErrors {
   let loaded = loaded_chars + c.to_string()
   match loaded {
-    _ if loaded == target_word => (Start, [target_token])
-    _ if target_word.contains(loaded) => (target_state(loaded), [])
+    _ if loaded == target_word => (i + 1, Start, [target_token])
+    _ if target_word.contains(loaded) => (i + 1, target_state(loaded), [])
     _ => raise UnexpectedCharacter(loaded)
   }
 }
@@ -302,6 +329,25 @@ test "null" {
 }
 
 ///|
+test "array" {
+  assert_eq!(
+    lex!("[11,22,33]"),
+    (
+      [
+        BracketStart,
+        Number(11),
+        Comma,
+        Number(22),
+        Comma,
+        Number(33),
+        BracketEnd,
+      ],
+      Start,
+    ),
+  )
+}
+
+///|
 test "lex" {
   assert_eq!(
     lex!(
@@ -321,9 +367,11 @@ test "lex" {
         DoubleQuotation,
         Colon,
         Number(456),
+        Comma,
         SingleQuotation,
         Text("array_test"),
         SingleQuotation,
+        Colon,
         BracketStart,
         SingleQuotation,
         Text("element1"),
