@@ -1,18 +1,20 @@
 ///|
 enum Node {
-  Object(Map[String, Node])
+  Object(Array[(String, Node)])
   String(String)
   Number(Int)
   Decimal(Double)
   Array(Array[Node])
-}derive(Eq, Show)
+  Null
+  Boolean(Bool)
+} derive(Eq, Show)
 
 ///|
 enum ParserState {
   Start
   InArray
   InObject(InObjectState)
-}derive(Eq, Show)
+} derive(Eq, Show)
 
 ///|
 enum InObjectState {
@@ -41,52 +43,61 @@ suberror ParserError {
 
 ///|
 fn parse(tokens : Array[Token]) -> Array[Node] raise ParserError {
-  let mut i = 0
   let mut nodes : Array[Node] = []
   let mut state = ParserState::Start
-  match tokens[0]{
-    SingleQuotation |DoubleQuotation=> ...
-    BracketStart => ...
+  return [match tokens[0] {
+    SingleQuotation | DoubleQuotation => parse_string(tokens)
+    BracketStart =>...
     BraceStart => ...
-    Null => ...
-    Boolean(_) => ...
-    Decimal(_) => ...
-    Number(_) => ...
-    _ => raise UnexpectedToken(tokens[0], [SingleQuotation, DoubleQuotation,BracketStart,BraceStart,Null])
-  }
-  return []
+    Null => Node::Null;
+    Boolean(b) => Boolean(b)
+    Decimal(d) => Decimal(d)
+    Number(n) => Number(n)
+    _ =>
+      raise UnexpectedToken(tokens[0], [
+        SingleQuotation,
+        DoubleQuotation,
+        BracketStart,
+        BraceStart,
+        Null,
+      ])
+  }]
 }
 
 ///|
-fn parse_string(
-  tokens : Array[Token],
-  i : Int
-) -> (Node, Int) raise ParserError {
-  match tokens[i] {
+fn parse_string(tokens : Array[Token]) -> Node raise ParserError {
+  match tokens[0] {
     Token::DoubleQuotation =>
-      match tokens[i + 1] {
+      match tokens[0 + 1] {
         Token::Text(text) =>
-          match tokens[i + 2] {
-            DoubleQuotation => (Node::String(text), i + 2)
-            _ => raise UnexpectedToken(tokens[i + 2], [DoubleQuotation])
+          match tokens[0 + 2] {
+            DoubleQuotation => Node::String(text)
+            _ => raise UnexpectedToken(tokens[0 + 2], [DoubleQuotation])
           }
-        _ => raise UnexpectedToken(tokens[i + 2], [DoubleQuotation])
+        _ => raise UnexpectedToken(tokens[0 + 2], [DoubleQuotation])
       }
     Token::SingleQuotation =>
-      match tokens[i + 1] {
+      match tokens[0 + 1] {
         Token::Text(text) =>
-          match tokens[i + 2] {
-            SingleQuotation => (Node::String(text), i + 2)
-            _ => raise UnexpectedToken(tokens[i + 2], [SingleQuotation])
+          match tokens[0 + 2] {
+            SingleQuotation => Node::String(text)
+            _ => raise UnexpectedToken(tokens[0 + 2], [SingleQuotation])
           }
-        _ => raise UnexpectedToken(tokens[i + 2], [SingleQuotation])
+        _ => raise UnexpectedToken(tokens[0 + 2], [SingleQuotation])
       }
-    _ => raise UnexpectedToken(tokens[i + 2], [SingleQuotation,DoubleQuotation])
+    _ =>
+      raise UnexpectedToken(tokens[0 + 2], [SingleQuotation, DoubleQuotation])
   }
 }
 
-test "parse_string"{
-assert_eq(parse_string([Token::DoubleQuotation,Token::Text("hoge"),Token::DoubleQuotation],0),(Node::String("hoge"),2))
+///|
+test "parse_string" {
+  assert_eq(
+    parse_string(
+      [Token::DoubleQuotation, Token::Text("hoge"), Token::DoubleQuotation]
+    ),
+    Node::String("hoge"),
+  )
 }
 
 ///|
