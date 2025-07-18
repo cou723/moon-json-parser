@@ -61,13 +61,13 @@ test "to_double" {
 }
 
 ///|
-enum StartingQuote {
+priv enum StartingQuote {
   Single
   Double
 } derive(Show, Eq)
 
 ///|
-enum TextLexerState {
+priv enum TextLexerState {
   Normal
   EscapeSequence
 } derive(Show, Eq)
@@ -85,8 +85,7 @@ enum LexerReadingState {
 
 ///|
 suberror LexerErrors {
-  UnexpectedCharacter(String,Int)
-  ExpectQuote
+  UnexpectedCharacter(String, Int)
 } derive(Eq, Show)
 
 ///|
@@ -95,30 +94,15 @@ pub fn lex(
 ) -> (Array[Token], LexerReadingState) raise LexerErrors {
   let tokens : Array[Token] = []
   let mut state : LexerReadingState = Start
-  let lex_true = lex_fixed_word!(
-    "true",
-    Boolean(true),
-    fn(loaded_chars) { True(loaded_chars) },
-    _,
-    _,
-    _,
-  )
-  let lex_false = lex_fixed_word!(
-    "false",
-    Boolean(false),
-    fn(loaded_chars) { False(loaded_chars) },
-    _,
-    _,
-    _,
-  )
-  let lex_null = lex_fixed_word!(
-    "null",
-    Null,
-    fn(loaded_chars) { Null(loaded_chars) },
-    _,
-    _,
-    _,
-  )
+  let lex_true = lex_fixed_word("true", Boolean(true), fn(loaded_chars) {
+    True(loaded_chars)
+  })
+  let lex_false = lex_fixed_word("false", Boolean(false), fn(loaded_chars) {
+    False(loaded_chars)
+  })
+  let lex_null = lex_fixed_word("null", Null, fn(loaded_chars) {
+    Null(loaded_chars)
+  })
   let terminated_text = text + "\u0000"
   let mut i : Int = 0 // UIntを使いたいところだが、文字列へのアクセスにはIntを使うので、Intで計算
   let mut infinity_blocker = 0
@@ -176,7 +160,7 @@ fn lex_start(
       _ if c.is_ascii_digit() => Number([c])
       _ if c.is_whitespace() => // Ignore whitespace characters
         Start
-      _ => raise UnexpectedCharacter(c.to_string(),i)
+      _ => raise UnexpectedCharacter(c.to_string(), i)
     },
     match c {
       '{' => [BraceStart]
@@ -191,7 +175,7 @@ fn lex_start(
       '\u0000' => []
       _ if c.is_ascii_digit() => []
       _ if c.is_whitespace() => []
-      _ => raise UnexpectedCharacter(c.to_string(),i)
+      _ => raise UnexpectedCharacter(c.to_string(), i)
     },
   )
 }
@@ -246,16 +230,15 @@ fn lex_number(
 fn lex_fixed_word(
   target_word : String,
   target_token : Token,
-  target_state : (String) -> LexerReadingState,
-  loaded_chars : String,
-  c : Char,
-  i : Int
-) -> (Int, LexerReadingState, Array[Token]) raise LexerErrors {
-  let loaded = loaded_chars + c.to_string()
-  match loaded {
-    _ if loaded == target_word => (i + 1, Start, [target_token])
-    _ if target_word.contains(loaded) => (i + 1, target_state(loaded), [])
-    _ => raise UnexpectedCharacter(loaded,i)
+  target_state : (String) -> LexerReadingState
+) -> (String, Char, Int) -> (Int, LexerReadingState, Array[Token]) raise LexerErrors {
+  (loaded_chars : String, c : Char, i : Int) => {
+    let loaded = loaded_chars + c.to_string()
+    match loaded {
+      _ if loaded == target_word => (i + 1, Start, [target_token])
+      _ if target_word.contains(loaded) => (i + 1, target_state(loaded), [])
+      _ => raise UnexpectedCharacter(loaded, i)
+    }
   }
 }
 
@@ -301,12 +284,25 @@ test "string" {
   assert_eq(
     lex(
       #|'text with white space'
+      ,
     ),
     (
-      [Token::SingleQuotation, Token::Text("text with white space"), Token::SingleQuotation],
+      [
+        Token::SingleQuotation,
+        Token::Text("text with white space"),
+        Token::SingleQuotation,
+      ],
       Start,
     ),
   )
+}
+
+///|
+fn assert_unexpected(input : String, expected : (String, Int)) -> Unit raise {
+  match (try? lex(input)) {
+    Ok(_) => assert_false(false)
+    Err(UnexpectedCharacter(x, y)) => assert_eq((x, y), expected)
+  }
 }
 
 ///|
@@ -327,18 +323,18 @@ test "decimal" {
 test "boolean" {
   assert_eq(lex("true"), ([Token::Boolean(true)], Start))
   assert_eq(lex("false"), ([Token::Boolean(false)], Start))
-  assert_eq(lex?("ttue"), Err(UnexpectedCharacter("tt",1)))
-  assert_eq(lex?("trua"), Err(UnexpectedCharacter("trua",3)))
-  assert_eq(lex?("falsa"), Err(UnexpectedCharacter("falsa",4)))
+  assert_unexpected("ttue", ("tt", 1))
+  assert_unexpected("trua", ("trua", 3))
+  assert_unexpected("falsa", ("falsa", 4))
 }
 
 ///|
 test "null" {
   assert_eq(lex("null"), ([Token::Null], Start))
-  assert_eq(lex?("mull"), Err(UnexpectedCharacter("m",0)))
-  assert_eq(lex?("nall"), Err(UnexpectedCharacter("na",1)))
-  assert_eq(lex?("nuli"), Err(UnexpectedCharacter("nuli",3)))
-  assert_eq(lex?("nullx"), Err(UnexpectedCharacter("x",4)))
+  assert_unexpected("nall", ("na", 1))
+  assert_unexpected("nuli", ("nuli", 3))
+  assert_unexpected("nula", ("nula", 3))
+  assert_unexpected("nullx", ("x", 4))
 }
 
 ///|
@@ -405,8 +401,8 @@ test "lex" {
 
 ///|
 test "lex with white space" {
-  assert_eq!(
-    lex!(
+  assert_eq(
+    lex(
       #|{
       #|  'decimal_test' : 12.3,
       #|  "number_test":456,
