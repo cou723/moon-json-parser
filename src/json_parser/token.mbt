@@ -1,18 +1,18 @@
 ///|
 pub enum Token {
-  Text(String, pos~ : UInt)
-  Number(Int, pos~ : UInt)
-  Decimal(Double, pos~ : UInt)
-  Boolean(Bool, pos~ : UInt)
-  Null(pos~ : UInt)
-  BraceStart(pos~ : UInt) // {
-  BraceEnd(pos~ : UInt) // }
-  BracketStart(pos~ : UInt) // [
-  BracketEnd(pos~ : UInt) // ]
-  DoubleQuotation(pos~ : UInt)
-  SingleQuotation(pos~ : UInt)
-  Comma(pos~ : UInt)
-  Colon(pos~ : UInt)
+  Text(String, start_offset~ : UInt)
+  Number(Int, start_offset~ : UInt)
+  Decimal(Double, start_offset~ : UInt)
+  Boolean(Bool, start_offset~ : UInt)
+  Null(start_offset~ : UInt)
+  BraceStart(start_offset~ : UInt) // {
+  BraceEnd(start_offset~ : UInt) // }
+  BracketStart(start_offset~ : UInt) // [
+  BracketEnd(start_offset~ : UInt) // ]
+  DoubleQuotation(start_offset~ : UInt)
+  SingleQuotation(start_offset~ : UInt)
+  Comma(start_offset~ : UInt)
+  Colon(start_offset~ : UInt)
 } derive(Show, Eq)
 
 ///|
@@ -40,7 +40,7 @@ fn Token::to_int(numbers : Array[Char]) -> Int raise LexerErrors {
     10.0.pow((numbers.length() - i - 1).to_double()).to_int() *
     (match c {
       n if n.is_numeric() => n.to_int() - 48
-      _ => raise UnexpectedCharacter(c.to_string(), i)
+      _ => raise UnexpectedCharacter(c.to_string(), i.reinterpret_as_uint())
     })
   })
 }

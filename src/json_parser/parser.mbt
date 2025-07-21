@@ -243,9 +243,9 @@ fn parse_string(
 test "parse_string" {
   assert_eq(
     parse_string([
-      Token::DoubleQuotation(pos=0),
-      Token::Text("hoge", pos=1),
-      Token::DoubleQuotation(pos=5),
+      Token::DoubleQuotation(start_offset=0),
+      Token::Text("hoge", start_offset=1),
+      Token::DoubleQuotation(start_offset=5),
     ]),
     (Node::String("hoge"), []),
   )
@@ -255,16 +255,16 @@ test "parse_string" {
 test "parse_string with extra tokens" {
   assert_eq(
     parse_string([
-      Token::DoubleQuotation(pos=0),
-      Token::Text("hoge", pos=1),
-      Token::DoubleQuotation(pos=5),
-      Token::Colon(pos=6),
-      Token::Null(pos=7),
-      Token::Null(pos=8),
+      Token::DoubleQuotation(start_offset=0),
+      Token::Text("hoge", start_offset=1),
+      Token::DoubleQuotation(start_offset=5),
+      Token::Colon(start_offset=6),
+      Token::Null(start_offset=7),
+      Token::Null(start_offset=8),
     ]),
     (
       Node::String("hoge"),
-      [Token::Colon(pos=6), Token::Null(pos=7), Token::Null(pos=8)],
+      [Token::Colon(start_offset=6), Token::Null(start_offset=7), Token::Null(start_offset=8)],
     ),
   )
 }
@@ -272,7 +272,7 @@ test "parse_string with extra tokens" {
 ///|
 test "parse_array empty" {
   assert_eq(
-    parse_array([BracketStart(pos=0), BracketEnd(pos=1)]),
+    parse_array([BracketStart(start_offset=0), BracketEnd(start_offset=1)]),
     (Array([]), []),
   )
 }
@@ -281,11 +281,11 @@ test "parse_array empty" {
 test "parse_array single element" {
   assert_eq(
     parse_array([
-      BracketStart(pos=0),
-      SingleQuotation(pos=1),
-      Text("string", pos=2),
-      SingleQuotation(pos=8),
-      BracketEnd(pos=9),
+      BracketStart(start_offset=0),
+      SingleQuotation(start_offset=1),
+      Text("string", start_offset=2),
+      SingleQuotation(start_offset=8),
+      BracketEnd(start_offset=9),
     ]),
     (Array([String("string")]), []),
   )
@@ -295,15 +295,15 @@ test "parse_array single element" {
 test "parse_array multiple element" {
   assert_eq(
     parse_array([
-      BracketStart(pos=0),
-      SingleQuotation(pos=1),
-      Text("string1", pos=2),
-      SingleQuotation(pos=9),
-      Comma(pos=10),
-      SingleQuotation(pos=11),
-      Text("string2", pos=12),
-      SingleQuotation(pos=19),
-      BracketEnd(pos=20),
+      BracketStart(start_offset=0),
+      SingleQuotation(start_offset=1),
+      Text("string1", start_offset=2),
+      SingleQuotation(start_offset=9),
+      Comma(start_offset=10),
+      SingleQuotation(start_offset=11),
+      Text("string2", start_offset=12),
+      SingleQuotation(start_offset=19),
+      BracketEnd(start_offset=20),
     ]),
     (Array([String("string1"), String("string2")]), []),
   )
@@ -313,14 +313,14 @@ test "parse_array multiple element" {
 test "parse_array with extra tokens" {
   assert_eq(
     parse_array([
-      BracketStart(pos=0),
-      SingleQuotation(pos=1),
-      Text("string", pos=2),
-      SingleQuotation(pos=8),
-      BracketEnd(pos=9),
-      Null(pos=10),
+      BracketStart(start_offset=0),
+      SingleQuotation(start_offset=1),
+      Text("string", start_offset=2),
+      SingleQuotation(start_offset=8),
+      BracketEnd(start_offset=9),
+      Null(start_offset=10),
     ]),
-    (Array([String("string")]), [Null(pos=10)]),
+    (Array([String("string")]), [Null(start_offset=10)]),
   )
 }
 
@@ -328,13 +328,13 @@ test "parse_array with extra tokens" {
 test "parse_key_value normal" {
   assert_eq(
     _parse_key_value([
-      SingleQuotation(pos=0),
-      Text("key", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("value", pos=0),
-      SingleQuotation(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("key", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("value", start_offset=0),
+      SingleQuotation(start_offset=0),
     ]),
     (("key", String("value")), []),
   )
@@ -344,20 +344,20 @@ test "parse_key_value normal" {
 test "parse_key_value extend tokens" {
   assert_eq(
     _parse_key_value([
-      SingleQuotation(pos=0),
-      Text("key", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("value", pos=0),
-      SingleQuotation(pos=0),
-      Token::Null(pos=0),
-      Token::Null(pos=0),
-      Token::Null(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("key", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("value", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Token::Null(start_offset=0),
+      Token::Null(start_offset=0),
+      Token::Null(start_offset=0),
     ]),
     (
       ("key", String("value")),
-      [Token::Null(pos=0), Token::Null(pos=0), Token::Null(pos=0)],
+      [Token::Null(start_offset=0), Token::Null(start_offset=0), Token::Null(start_offset=0)],
     ),
   )
 }
@@ -366,16 +366,16 @@ test "parse_key_value extend tokens" {
 test "parse_key_values single attribute" {
   assert_eq(
     parse_key_values([
-      SingleQuotation(pos=0),
-      Text("key", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("value", pos=0),
-      SingleQuotation(pos=0),
-      BraceEnd(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("key", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("value", start_offset=0),
+      SingleQuotation(start_offset=0),
+      BraceEnd(start_offset=0),
     ]),
-    (Object([("key", String("value"))]), [BraceEnd(pos=0)]),
+    (Object([("key", String("value"))]), [BraceEnd(start_offset=0)]),
   )
 }
 
@@ -384,28 +384,28 @@ test "parse_key_values multiple attributes" {
   assert_eq(
     parse_key_values([
       // "key":"value"
-      SingleQuotation(pos=0),
-      Text("key", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("value", pos=0),
-      SingleQuotation(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("key", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("value", start_offset=0),
+      SingleQuotation(start_offset=0),
       // (pos=0),
-      Comma(pos=0),
+      Comma(start_offset=0),
       // "key":"value"
-      SingleQuotation(pos=0),
-      Text("key", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("value", pos=0),
-      SingleQuotation(pos=0),
-      BraceEnd(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("key", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("value", start_offset=0),
+      SingleQuotation(start_offset=0),
+      BraceEnd(start_offset=0),
     ]),
     (
       Object([("key", String("value")), ("key", String("value"))]),
-      [BraceEnd(pos=0)],
+      [BraceEnd(start_offset=0)],
     ),
   )
 }
@@ -413,7 +413,7 @@ test "parse_key_values multiple attributes" {
 ///|
 test "parse_object minimum" {
   assert_eq(
-    parse_object([BraceStart(pos=0), BraceEnd(pos=1)]),
+    parse_object([BraceStart(start_offset=0), BraceEnd(start_offset=1)]),
     (Object([]), []),
   )
 }
@@ -422,72 +422,72 @@ test "parse_object minimum" {
 test "parse all" {
   assert_eq(
     parse_object([
-      BraceStart(pos=0),
+      BraceStart(start_offset=0),
       // "string":"this is string"
-      SingleQuotation(pos=0),
-      Text("string", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("this is string", pos=0),
-      SingleQuotation(pos=0),
-      Comma(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("string", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("this is string", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Comma(start_offset=0),
       // "number":1
-      SingleQuotation(pos=0),
-      Text("number", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      Number(1, pos=0),
-      Comma(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("number", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      Number(1, start_offset=0),
+      Comma(start_offset=0),
       // "null": null
-      SingleQuotation(pos=0),
-      Text("null", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      Null(pos=0),
-      Comma(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("null", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      Null(start_offset=0),
+      Comma(start_offset=0),
       // "boolean":true
-      SingleQuotation(pos=0),
-      Text("boolean", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      Boolean(true, pos=0),
-      Comma(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("boolean", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      Boolean(true, start_offset=0),
+      Comma(start_offset=0),
       // "Decimal":3.14
-      SingleQuotation(pos=0),
-      Text("decimal", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      Decimal(3.14, pos=0),
-      Comma(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("decimal", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      Decimal(3.14, start_offset=0),
+      Comma(start_offset=0),
       // "array": [0,1,2]
-      SingleQuotation(pos=0),
-      Text("array", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      BracketStart(pos=0),
-      Number(0, pos=0),
-      Comma(pos=0),
-      Number(1, pos=0),
-      Comma(pos=0),
-      Number(2, pos=0),
-      BracketEnd(pos=0),
-      Comma(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("array", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      BracketStart(start_offset=0),
+      Number(0, start_offset=0),
+      Comma(start_offset=0),
+      Number(1, start_offset=0),
+      Comma(start_offset=0),
+      Number(2, start_offset=0),
+      BracketEnd(start_offset=0),
+      Comma(start_offset=0),
       // "object": {"value":"key"}
-      SingleQuotation(pos=0),
-      Text("object", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      BraceStart(pos=0),
-      SingleQuotation(pos=0),
-      Text("value", pos=0),
-      SingleQuotation(pos=0),
-      Colon(pos=0),
-      SingleQuotation(pos=0),
-      Text("key", pos=0),
-      SingleQuotation(pos=0),
-      BraceEnd(pos=0),
-      BraceEnd(pos=0),
+      SingleQuotation(start_offset=0),
+      Text("object", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      BraceStart(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("value", start_offset=0),
+      SingleQuotation(start_offset=0),
+      Colon(start_offset=0),
+      SingleQuotation(start_offset=0),
+      Text("key", start_offset=0),
+      SingleQuotation(start_offset=0),
+      BraceEnd(start_offset=0),
+      BraceEnd(start_offset=0),
     ]),
     (
       Object([
