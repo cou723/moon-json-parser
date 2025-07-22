@@ -42,23 +42,21 @@ fn Lexer::init(text : String) -> Lexer {
 }
 
 ///|
-fn Lexer::add_tokens(self : Lexer, tokens : Array[Token]) -> Lexer {
+fn Lexer::append_tokens(self : Lexer, tokens : Array[Token]) -> Lexer {
   return { ..self, read_tokens: self.read_tokens + tokens }
 }
 
 ///|
-fn Lexer::update_state(self : Lexer, state : LexerReadingState) -> Lexer {
+fn Lexer::trans_state(self : Lexer, state : LexerReadingState) -> Lexer {
   return { ..self, state, }
 }
 
 ///|
-
-///|
-fn Lexer::set_offset(self : Lexer, offset : UInt) -> Lexer {
+fn Lexer::increment_offset(self : Lexer) -> Lexer {
   // if self.target_text.length().reinterpret_as_uint() < offset {
   //   fail("hoge~")
   // }
-  return { ..self, current_offset: offset }
+  return { ..self, current_offset: self.current_offset + 1 }
 }
 
 ///|
@@ -113,7 +111,7 @@ pub fn lex(
       println("text length: \{text.length()}")
       break
     }
-    let (updated_i, updated_state, additional_tokens) = match lexer.state {
+    lexer = match lexer.state {
       Start => lex_start(lexer)
       Text(quote, loaded, text_lexer_state) =>
         lex_text(text_lexer_state, quote, loaded, lexer)
@@ -124,22 +122,17 @@ pub fn lex(
       False(loaded_chars) => lex_false(loaded_chars, lexer)
       Null(loaded_chars) => lex_null(loaded_chars, lexer)
     }
-    lexer = lexer
-      .update_state(updated_state)
-      .add_tokens(additional_tokens)
-      .set_offset(updated_i)
     infinity_blocker += 1
   }
-  lexer = lexer.update_state(Start)
+  lexer = lexer.trans_state(Start)
   return (lexer.read_tokens, lexer.state)
 }
 
 ///|
-fn lex_start(
-  lexer : Lexer
-) -> (UInt, LexerReadingState, Array[Token]) raise LexerErrors {
-  (
-    lexer.current_offset + 1,
+fn lex_start(lexer : Lexer) -> Lexer raise LexerErrors {
+  lexer
+  .increment_offset()
+  .trans_state(
     match lexer.current_char() {
       '{' | '}' | '[' | ']' | ':' | ',' => Start
       '"' => Text(Double, "", Normal(start=lexer.current_offset + 1))
@@ -150,10 +143,12 @@ fn lex_start(
       '\u0000' => Start
       _ if lexer.current_char().is_ascii_digit() =>
         Number([lexer.current_char()], start_offset=lexer.current_offset)
-      _ if lexer.current_char().is_whitespace() => // Ignore whitespace characters
+      _ if lexer.current_char().is_whitespace() => // skip whitespace characters
         Start
       _ => raise lexer.unexpected_error()
     },
+  )
+  .append_tokens(
     match lexer.current_char() {
       '{' => [BraceStart(start_offset=lexer.current_offset)]
       '}' => [BraceEnd(start_offset=lexer.current_offset)]
@@ -178,14 +173,14 @@ fn lex_text(
   quote : StartingQuote,
   loaded : String,
   lexer : Lexer
-) -> (UInt, LexerReadingState, Array[Token]) {
-  (
-    lexer.current_offset + 1,
+) -> Lexer {
+  lexer
+  .increment_offset()
+  .trans_state(
     match state {
       Normal(start~) =>
         match lexer.current_char() {
-          '\"' => Start
-          '\'' => Start
+          '\"' | '\'' => Start
           '\\' => Text(quote, loaded, EscapeSequence(start~))
           _ =>
             Text(
@@ -197,6 +192,8 @@ fn lex_text(
       EscapeSequence(start~) =>
         Text(quote, loaded + lexer.current_char().to_string(), Normal(start~))
     },
+  )
+  .append_tokens(
     match state {
       Normal(start~) =>
         match lexer.current_char() {
@@ -222,34 +219,30 @@ fn lex_number(
   number_list : Array[Char],
   lexer : Lexer,
   start_offset : UInt
-) -> (UInt, LexerReadingState, Array[Token]) raise LexerErrors {
+) -> Lexer raise LexerErrors {
   match lexer.current_char() {
     '.' =>
-      (
-        lexer.current_offset + 1,
-        Decimal(number_list, number_list.length(), start_offset~),
-        [],
-      )
+      lexer
+      .increment_offset()
+      .trans_state(Decimal(number_list, number_list.length(), start_offset~))
     _ if lexer.current_char().is_ascii_digit() =>
-      (
-        lexer.current_offset + 1,
+      lexer
+      .increment_offset()
+      .trans_state(
         Number([..number_list, lexer.current_char()], start_offset~),
-        [],
       )
     _ =>
-      (
-        lexer.current_offset,
-        Start,
-        [
-          Token::Number(
-            Token::to_int(number_list) catch {
-              UnexpectedCharacter(t, offset) =>
-                raise UnexpectedCharacter(t, offset + lexer.current_offset)
-            },
-            start_offset~,
-          ),
-        ],
-      )
+      lexer
+      .trans_state(Start)
+      .append_tokens([
+        Token::Number(
+          Token::to_int(number_list) catch {
+            UnexpectedCharacter(t, offset) =>
+              raise UnexpectedCharacter(t, offset + lexer.current_offset)
+          },
+          start_offset~,
+        ),
+      ])
   }
 }
 
@@ -259,20 +252,18 @@ fn lex_decimal(
   decimal : Array[Char],
   e : Int,
   start_offset : UInt
-) -> (UInt, LexerReadingState, Array[Token]) raise LexerErrors {
+) -> Lexer raise LexerErrors {
   match lexer.current_char() {
     _ if lexer.current_char().is_ascii_digit() =>
-      (
-        lexer.current_offset + 1,
+      lexer
+      .increment_offset()
+      .trans_state(
         Decimal([..decimal, lexer.current_char()], e, start_offset~),
-        [],
       )
     _ =>
-      (
-        lexer.current_offset,
-        Start,
-        [Decimal(Token::to_double(decimal, e), start_offset~)],
-      )
+      lexer
+      .trans_state(Start)
+      .append_tokens([Decimal(Token::to_double(decimal, e), start_offset~)])
   }
 }
 
@@ -281,24 +272,23 @@ fn lex_fixed_word(
   target_word : String,
   target_token_generator : (UInt) -> Token,
   target_state : (String) -> LexerReadingState
-) -> (String, Lexer) -> (UInt, LexerReadingState, Array[Token]) raise LexerErrors {
+) -> (String, Lexer) -> Lexer raise LexerErrors {
   (loaded_chars : String, lexer : Lexer) => {
     let loaded = loaded_chars + lexer.current_char().to_string()
     match loaded {
       _ if loaded == target_word =>
-        (
-          lexer.current_offset + 1,
-          Start,
-          [
-            target_token_generator(
-              lexer.current_offset +
-              1 -
-              target_word.length().reinterpret_as_uint(),
-            ),
-          ],
-        )
+        lexer
+        .increment_offset()
+        .trans_state(Start)
+        .append_tokens([
+          target_token_generator(
+            lexer.current_offset +
+            1 -
+            target_word.length().reinterpret_as_uint(),
+          ),
+        ])
       _ if target_word.contains(loaded) =>
-        (lexer.current_offset + 1, target_state(loaded), [])
+        lexer.increment_offset().trans_state(target_state(loaded))
       _ => raise UnexpectedCharacter(loaded, lexer.current_offset)
     }
   }
