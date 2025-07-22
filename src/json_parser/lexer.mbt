@@ -53,9 +53,8 @@ fn Lexer::trans_state(self : Lexer, state : LexerReadingState) -> Lexer {
 
 ///|
 fn Lexer::increment_offset(self : Lexer) -> Lexer {
-  // if self.target_text.length().reinterpret_as_uint() < offset {
-  //   fail("hoge~")
-  // }
+  // ここでoffsetが不正になる可能性があるが、Errorを増やすとなるとLexerErrorsに増やすことになる。
+  // しかしそうすると、Enumの部分型が作れない都合上LexerErro_rの特定のエラーしか返さない関数のエラーハンドリングに項目を増やすことになりよくない
   return { ..self, current_offset: self.current_offset + 1 }
 }
 
@@ -72,8 +71,7 @@ fn Lexer::current_char(self : Lexer) -> Char {
   return self.target_text
     .charcode_at(self.current_offset.reinterpret_as_int())
     .to_char()
-    .unwrap() // set_offset時にoffsetの正しさは検証しているので、target_textが不正に書き換えられていない限りunwrapして問題ない
-  //
+    .unwrap()
 }
 
 ///|
